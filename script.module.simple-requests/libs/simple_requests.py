@@ -94,7 +94,7 @@ class Response:
     def __init__(self):
         self.encoding: str = 'utf-8'
         self.status_code: int = -1
-        self.headers: Dict[str, str] = {}
+        self._headers: Optional[HTTPMessage] = None
         self.url: str = ''
         self.content: bytes = b''
         self._text = None
@@ -107,6 +107,17 @@ class Response:
         return self.__str__()
 
     @property
+    def headers(self) -> HTTPMessage:
+        return self._headers
+
+    @headers.setter
+    def headers(self, value: HTTPMessage):
+        charset = value.get_content_charset()
+        if charset:
+            self.encoding = charset
+        self._headers = value
+
+    @property
     def ok(self) -> bool:
         return self.status_code < 400
 
@@ -116,7 +127,10 @@ class Response:
         :return: Response payload as decoded text
         """
         if self._text is None:
-            self._text = self.content.decode(self.encoding)
+            try:
+                self._text = self.content.decode(self.encoding)
+            except (UnicodeDecodeError, LookupError):
+                self._text = self.content.decode('utf-8', 'replace')
         return self._text
 
     def json(self) -> Optional[Union[Dict[str, Any], List[Any]]]:
