@@ -1,7 +1,7 @@
 # simple-requests
 
 A simple Python library for making HTTP requests with API similar to the popular **requests** library.
-It depends only on the Python standard library.
+It depends only on the Python standard library and uses **urllib.request** module internally.
 
 Supported:
 * HTTP methods: GET, POST
@@ -15,8 +15,10 @@ Supported:
 
 Not supported:
 * File upload.
+* Persistent Session objects. Since Python's built-in **urllib.request** does not support keep-alive
+  connections, persistent sessions do not make much sense in this case.
 
-With the limitation listed above it can serve as a drop-in replacement for **requests**.
+With the limitations listed above it can serve as a drop-in replacement for **requests**.
 
 Example:
 ```python

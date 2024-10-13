@@ -39,6 +39,7 @@ import gzip
 import io
 import json as _json
 import ssl
+import threading
 from base64 import b64encode
 from email.message import Message
 from http.cookiejar import CookieJar, Cookie
@@ -90,7 +91,7 @@ class HTTPMessage(Message):
             self[key] = value
 
 
-class PicklableCookieJar(CookieJar):
+class RequestsCookieJar(CookieJar):
 
     def __setitem__(self, name: str, value: str) -> None:
         """Set a cookie like in a dictionary."""
@@ -149,6 +150,9 @@ class PicklableCookieJar(CookieJar):
         for cookie in self:
             yield cookie.value
 
+    def get_dict(self) -> Dict[str, str]:
+        return dict(self.items())
+
     def update(self, cookies: Union[Dict[str, str], CookieJar]):
         if isinstance(cookies, dict):
             for key, value in cookies.items():
@@ -163,19 +167,17 @@ class PicklableCookieJar(CookieJar):
         except KeyError:
             return default
 
-    def __len__(self) -> int:
-        """Return the number of cookies."""
-        return len(list(self))
-
     def __getstate__(self):
         """Return the state for pickling."""
         state = self.__dict__.copy()
         # Get the list of cookies for pickling
         state['cookies'] = list(self)
+        state['_cookies_lock'] = None
         return state
 
     def __setstate__(self, state):
         """Restore the state from pickling."""
+        state['_cookies_lock'] = threading.RLock()
         self.__dict__.update(state)
         # Re-set cookies from pickled state
         cookies = state.get('cookies', [])
@@ -195,7 +197,7 @@ class Response:
         self.content: bytes = b''
         self._text = None
         self._json = self.NULL
-        self.cookies: PicklableCookieJar = PicklableCookieJar()
+        self.cookies: RequestsCookieJar = RequestsCookieJar()
 
     def __str__(self) -> str:
         return f'<Response [{self.status_code}]>'
@@ -267,8 +269,6 @@ def _create_request(url_structure, params=None, data=None, headers=None, auth=No
         body = data.encode('utf-8')
     if body is None and hasattr(data, 'read'):
         body = data.read()
-        if hasattr(data, 'close'):
-            data.close()
     if body is not None and 'Content-Type' not in prepared_headers:
         prepared_headers['Content-Type'] = 'application/octet-stream'
     if auth is not None:
@@ -282,7 +282,7 @@ def _create_request(url_structure, params=None, data=None, headers=None, auth=No
 def _get_cookie_jar(cookies):
     if isinstance(cookies, CookieJar):
         return cookies
-    cookie_jar = PicklableCookieJar()
+    cookie_jar = RequestsCookieJar()
     if cookies is not None:
         cookie_jar.update(cookies)
     return cookie_jar
@@ -355,9 +355,9 @@ def post(url: str,
         content = gzip_file.read()
     response.content = content
     if isinstance(cookies, CookieJar):
-        cookies.clear(domain=url_structure.netloc)
+        cookies.clear()
         response.cookies = cookies
-    response.cookies.make_cookies(r, request)
+    response.cookies.extract_cookies(r, request)
     return response
 
 
@@ -395,7 +395,7 @@ class Session:
     """
     def __init__(self):
         self.auth: Optional[Tuple[str, str]] = None
-        self.cookies: CookieJar = PicklableCookieJar()
+        self.cookies: CookieJar = RequestsCookieJar()
         self.verify: bool = True
 
     def get(self,
