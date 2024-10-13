@@ -52,9 +52,9 @@ __all__ = [
     'RequestException',
     'ConnectionError',
     'HTTPError',
+    'RequestsCookieJar',
     'get',
     'post',
-    'Session',
 ]
 
 
@@ -385,95 +385,3 @@ def get(url: str,
     """
     return post(url=url, params=params, headers=headers, cookies=cookies,
                 auth=auth, timeout=timeout, verify=verify)
-
-
-class Session:
-    """
-    A Session class that mimics requests.Session behavior
-
-    It can be used as a drop-in replacement for requests.Session in basic scenarios.
-    """
-    def __init__(self):
-        self.auth: Optional[Tuple[str, str]] = None
-        self.cookies: CookieJar = RequestsCookieJar()
-        self.verify: bool = True
-
-    def get(self,
-            url: str,
-            params: Optional[Dict[str, Any]] = None,
-            headers: Optional[Dict[str, str]] = None,
-            cookies: Union[Dict[str, str], CookieJar] = None,
-            auth: Optional[Tuple[str, str]] = None,
-            timeout: Optional[float] = None) -> Response:
-        """
-        GET request
-
-        This function by default sends Accept-Encoding: gzip header
-        to receive response content compressed.
-
-        :param url: URL
-        :param params: URL query params
-        :param headers: additional headers
-        :param cookies: cookies as a dict or CookieJar object
-        :param auth: a tuple of (login, password) for Basic authentication
-        :param timeout: request timeout in seconds
-        :raises: ConnectionError
-        :return: Response object
-    """
-        if auth is None:
-            auth = self.auth
-        if cookies is None:
-            cookies=self.cookies
-        response = get(url, params=params, headers=headers, cookies=cookies, auth=auth,
-                       timeout=timeout, verify=self.verify)
-        self.cookies = response.cookies
-        return response
-
-    def post(self,
-             url: str,
-             params: Optional[Dict[str, Any]] = None,
-             data: Optional[Union[Dict[str, Any], str, bytes, BinaryIO]] = None,
-             headers: Optional[Dict[str, str]] = None,
-             cookies: Union[Dict[str, str], CookieJar] = None,
-             auth: Optional[Tuple[str, str]] = None,
-             timeout: Optional[float] = None,
-             json: Optional[Dict[str, Any]] = None) -> Response:
-        """
-        POST request
-
-        This method assumes that a request body will be encoded with UTF-8
-        and by default sends Accept-Encoding: gzip header to receive response content compressed.
-
-        :param url: URL
-        :param params: URL query params
-        :param data: request payload as dict, str, bytes or a binary file object.
-            If "data" or "json" is passed then a POST request is sent.
-            For str, bytes or file object it's caller's responsibility to provide a proper
-            'Content-Type' header.
-        :param headers: additional headers
-        :param cookies: cookies as a dict or CookieJar object
-        :param auth: a tuple of (login, password) for Basic authentication
-        :param timeout: request timeout in seconds
-        :param verify: verify SSL certificates
-        :param json: request payload as JSON. This parameter has precedence over "data", that is,
-            if it's present then "data" is ignored.
-        :raises: ConnectionError
-        :return: Response object
-        """
-        if auth is None:
-            auth = self.auth
-        if cookies is None:
-            cookies=self.cookies
-        response = post(url, params=params, data=data, headers=headers, cookies=cookies, auth=auth,
-                        timeout=timeout, verify=self.verify, json=json)
-        self.cookies = response.cookies
-        return response
-
-    def close(self):
-        pass
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
