@@ -28,7 +28,7 @@ jobs:
         pip install Pylint
     - name: Lint with Pylint
       run: |
-        make lint
+        pylint script.module.simple-requests/libs/simple_requests.py
     - name: Test
       run: |
-        make test
+        python3 tests/tests.py
