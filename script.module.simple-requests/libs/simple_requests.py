@@ -92,6 +92,7 @@ class HTTPMessage(Message):
 
 
 class RequestsCookieJar(CookieJar):
+    """A picklable CookieJar class with dictionary-like interface"""
 
     def __setitem__(self, name: str, value: str) -> None:
         """Set a cookie like in a dictionary."""
@@ -332,24 +333,23 @@ def post(url: str,
         url_request.HTTPSHandler(context=context),
         url_request.HTTPCookieProcessor(cookie_jar)
     )
-    fp = None
+    resp = None
     try:
-        r = fp = opener_director.open(request, timeout=timeout)
-        content = fp.read()
+        resp = opener_director.open(request, timeout=timeout)
+        content = resp.read()
     except _HTTPError as exc:
-        r = exc
-        fp = exc.fp
-        content = fp.read()
+        resp = exc
+        content = resp.read()
     except Exception as exc:
         raise ConnectionError(str(exc), request.full_url) from exc
     finally:
-        if fp is not None:
-            fp.close()
+        if resp is not None:
+            resp.close()
     response = Response()
-    response.status_code = r.status if hasattr(r, 'status') else r.getstatus()
-    response.headers = r.headers
-    response.url = r.url if hasattr(r, 'url') else r.geturl()
-    if r.headers.get('Content-Encoding') == 'gzip':
+    response.status_code = resp.status if hasattr(resp, 'status') else resp.getstatus()
+    response.headers = resp.headers if hasattr(resp, 'headers') else resp.info()
+    response.url = resp.url if hasattr(resp, 'url') else resp.geturl()
+    if resp.headers.get('Content-Encoding') == 'gzip':
         temp_fo = io.BytesIO(content)
         gzip_file = gzip.GzipFile(fileobj=temp_fo)
         content = gzip_file.read()
@@ -357,7 +357,7 @@ def post(url: str,
     if isinstance(cookies, CookieJar):
         cookies.clear()
         response.cookies = cookies
-    response.cookies.extract_cookies(r, request)
+    response.cookies.extract_cookies(resp, request)
     return response
 
 
@@ -380,6 +380,7 @@ def get(url: str,
     :param cookies: cookies as a dict or CookieJar object
     :param auth: a tuple of (login, password) for Basic authentication
     :param timeout: request timeout in seconds
+    :param verify: verify SSL certificates
     :raises: ConnectionError
     :return: Response object
     """
