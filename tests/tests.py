@@ -2,7 +2,7 @@ import io
 import pickle
 import sys
 from pathlib import Path
-from unittest import TestCase
+from unittest import TestCase, main as unittest_main
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 sys.path.append(str(BASE_DIR / 'script.module.simple-requests' / 'libs'))
@@ -60,13 +60,9 @@ class GetTestCase(TestCase):
 
     def test_get_error_400(self):
         response = self._call_url(BASE_URL + '/status/400')
+        self.assertEqual(response.status_code, 400)
         self.assertFalse(response.ok)
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            self.assertIn('HTTPError: 400', str(exc))
-        else:
-            raise AssertionError('HTTPError not raised')
+        self.assertRaises(requests.HTTPError, response.raise_for_status)
 
 
 class PostTestCase(TestCase):
@@ -110,3 +106,7 @@ class RequestsCookieJarTestCase(TestCase):
         picked_bytes = pickle.dumps(cookie_jar)
         unpickled_cookie_jar = pickle.loads(picked_bytes)
         self.assertEqual(unpickled_cookie_jar['foo'], 'bar')
+
+
+if __name__ == '__main__':
+    unittest_main()
