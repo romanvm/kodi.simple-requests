@@ -28,11 +28,11 @@ Supported:
 * Disabling SSL certificates validation.
 * Request payload as form data, JSON and raw binary data.
 * Custom headers.
+* Cookies.
 * Basic authentication.
 * Gzipped response content.
 
 Not supported:
-* Cookies.
 * File upload.
 """
 import gzip
@@ -41,7 +41,8 @@ import json as _json
 import ssl
 from base64 import b64encode
 from email.message import Message
-from typing import Optional, Dict, Any, Tuple, Union, List, BinaryIO
+from http.cookiejar import CookieJar, Cookie
+from typing import Optional, Dict, Any, Tuple, Union, List, BinaryIO, Iterable
 from urllib import request as url_request
 from urllib.error import HTTPError as _HTTPError
 from urllib.parse import urlparse, urlencode
@@ -52,6 +53,7 @@ __all__ = [
     'HTTPError',
     'get',
     'post',
+    'Session',
 ]
 
 
@@ -88,6 +90,100 @@ class HTTPMessage(Message):
             self[key] = value
 
 
+class PicklableCookieJar(CookieJar):
+
+    def __setitem__(self, name: str, value: str) -> None:
+        """Set a cookie like in a dictionary."""
+        cookie = Cookie(
+            version=0,
+            name=name,
+            value=value,
+            port=None,
+            port_specified=False,
+            domain="",
+            domain_specified=False,
+            domain_initial_dot=False,
+            path="/",
+            path_specified=True,
+            secure=False,
+            expires=None,
+            discard=True,
+            comment=None,
+            comment_url=None,
+            rest={'HttpOnly': None},
+            rfc2109=False
+        )
+        self.set_cookie(cookie)
+
+    def __getitem__(self, name: str) -> str:
+        """Retrieve a cookie's value by name."""
+        for cookie in self:
+            if cookie.name == name:
+                return cookie.value
+        raise KeyError(f"Cookie with name {name} not found.")
+
+    def __delitem__(self, name: str) -> None:
+        """Delete a cookie by name."""
+        cookies_to_keep = [cookie for cookie in self if cookie.name != name]
+        self.clear()  # Remove all cookies
+        for cookie in cookies_to_keep:
+            self.set_cookie(cookie)
+
+    def __contains__(self, name) -> bool:
+        """Check if a cookie with the given name exists."""
+        for cookie in self:
+            if cookie.name == name:
+                return True
+        return False
+
+    def items(self) -> Iterable[Tuple[str, str]]:
+        for cookie in self:
+            yield cookie.name, cookie.value
+
+    def keys(self) -> Iterable[str]:
+        """Return the names of all cookies."""
+        for cookie in self:
+            yield cookie.name
+
+    def values(self) -> Iterable[str]:
+        for cookie in self:
+            yield cookie.value
+
+    def update(self, cookies: Union[Dict[str, str], CookieJar]):
+        if isinstance(cookies, dict):
+            for key, value in cookies.items():
+                self[key] = value
+            return
+        for cookie in cookies:
+            self.set_cookie(cookie)
+
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __len__(self) -> int:
+        """Return the number of cookies."""
+        return len(list(self))
+
+    def __getstate__(self):
+        """Return the state for pickling."""
+        state = self.__dict__.copy()
+        # Get the list of cookies for pickling
+        state['cookies'] = list(self)
+        return state
+
+    def __setstate__(self, state):
+        """Restore the state from pickling."""
+        self.__dict__.update(state)
+        # Re-set cookies from pickled state
+        cookies = state.get('cookies', [])
+        self.clear()
+        for cookie in cookies:
+            self.set_cookie(cookie)
+
+
 class Response:
     NULL = object()
 
@@ -99,6 +195,7 @@ class Response:
         self.content: bytes = b''
         self._text = None
         self._json = self.NULL
+        self.cookies: PicklableCookieJar = PicklableCookieJar()
 
     def __str__(self) -> str:
         return f'<Response [{self.status_code}]>'
@@ -182,10 +279,20 @@ def _create_request(url_structure, params=None, data=None, headers=None, auth=No
     return url_request.Request(full_url, body, prepared_headers)
 
 
+def _get_cookie_jar(cookies):
+    if isinstance(cookies, CookieJar):
+        return cookies
+    cookie_jar = PicklableCookieJar()
+    if cookies is not None:
+        cookie_jar.update(cookies)
+    return cookie_jar
+
+
 def post(url: str,
          params: Optional[Dict[str, Any]] = None,
          data: Optional[Union[Dict[str, Any], str, bytes, BinaryIO]] = None,
          headers: Optional[Dict[str, str]] = None,
+         cookies: Union[Dict[str, str], CookieJar] = None,
          auth: Optional[Tuple[str, str]] = None,
          timeout: Optional[float] = None,
          verify: bool = True,
@@ -203,11 +310,13 @@ def post(url: str,
         For str, bytes or file object it's caller's responsibility to provide a proper
         'Content-Type' header.
     :param headers: additional headers
+    :param cookies: cookies as a dict or CookieJar object
     :param auth: a tuple of (login, password) for Basic authentication
     :param timeout: request timeout in seconds
     :param verify: verify SSL certificates
     :param json: request payload as JSON. This parameter has precedence over "data", that is,
         if it's present then "data" is ignored.
+    :raises: ConnectionError
     :return: Response object
     """
     url_structure = urlparse(url)
@@ -218,9 +327,14 @@ def post(url: str,
         if not verify:
             context.verify_mode = ssl.CERT_NONE
             context.check_hostname = False
+    cookie_jar = _get_cookie_jar(cookies)
+    opener_director = url_request.build_opener(
+        url_request.HTTPSHandler(context=context),
+        url_request.HTTPCookieProcessor(cookie_jar)
+    )
     fp = None
     try:
-        r = fp = url_request.urlopen(request, timeout=timeout, context=context)
+        r = fp = opener_director.open(request, timeout=timeout)
         content = fp.read()
     except _HTTPError as exc:
         r = exc
@@ -240,12 +354,17 @@ def post(url: str,
         gzip_file = gzip.GzipFile(fileobj=temp_fo)
         content = gzip_file.read()
     response.content = content
+    if isinstance(cookies, CookieJar):
+        cookies.clear(domain=url_structure.netloc)
+        response.cookies = cookies
+    response.cookies.make_cookies(r, request)
     return response
 
 
 def get(url: str,
         params: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
+        cookies: Union[Dict[str, str], CookieJar] = None,
         auth: Optional[Tuple[str, str]] = None,
         timeout: Optional[float] = None,
         verify: bool = True) -> Response:
@@ -258,9 +377,103 @@ def get(url: str,
     :param url: URL
     :param params: URL query params
     :param headers: additional headers
+    :param cookies: cookies as a dict or CookieJar object
     :param auth: a tuple of (login, password) for Basic authentication
     :param timeout: request timeout in seconds
-    :param verify: verify SSL certificates
+    :raises: ConnectionError
     :return: Response object
     """
-    return post(url=url, params=params, headers=headers, auth=auth, timeout=timeout, verify=verify)
+    return post(url=url, params=params, headers=headers, cookies=cookies,
+                auth=auth, timeout=timeout, verify=verify)
+
+
+class Session:
+    """
+    A Session class that mimics requests.Session behavior
+
+    It can be used as a drop-in replacement for requests.Session in basic scenarios.
+    """
+    def __init__(self):
+        self.auth: Optional[Tuple[str, str]] = None
+        self.cookies: CookieJar = PicklableCookieJar()
+        self.verify: bool = True
+
+    def get(self,
+            url: str,
+            params: Optional[Dict[str, Any]] = None,
+            headers: Optional[Dict[str, str]] = None,
+            cookies: Union[Dict[str, str], CookieJar] = None,
+            auth: Optional[Tuple[str, str]] = None,
+            timeout: Optional[float] = None) -> Response:
+        """
+        GET request
+
+        This function by default sends Accept-Encoding: gzip header
+        to receive response content compressed.
+
+        :param url: URL
+        :param params: URL query params
+        :param headers: additional headers
+        :param cookies: cookies as a dict or CookieJar object
+        :param auth: a tuple of (login, password) for Basic authentication
+        :param timeout: request timeout in seconds
+        :raises: ConnectionError
+        :return: Response object
+    """
+        if auth is None:
+            auth = self.auth
+        if cookies is None:
+            cookies=self.cookies
+        response = get(url, params=params, headers=headers, cookies=cookies, auth=auth,
+                       timeout=timeout, verify=self.verify)
+        self.cookies = response.cookies
+        return response
+
+    def post(self,
+             url: str,
+             params: Optional[Dict[str, Any]] = None,
+             data: Optional[Union[Dict[str, Any], str, bytes, BinaryIO]] = None,
+             headers: Optional[Dict[str, str]] = None,
+             cookies: Union[Dict[str, str], CookieJar] = None,
+             auth: Optional[Tuple[str, str]] = None,
+             timeout: Optional[float] = None,
+             json: Optional[Dict[str, Any]] = None) -> Response:
+        """
+        POST request
+
+        This method assumes that a request body will be encoded with UTF-8
+        and by default sends Accept-Encoding: gzip header to receive response content compressed.
+
+        :param url: URL
+        :param params: URL query params
+        :param data: request payload as dict, str, bytes or a binary file object.
+            If "data" or "json" is passed then a POST request is sent.
+            For str, bytes or file object it's caller's responsibility to provide a proper
+            'Content-Type' header.
+        :param headers: additional headers
+        :param cookies: cookies as a dict or CookieJar object
+        :param auth: a tuple of (login, password) for Basic authentication
+        :param timeout: request timeout in seconds
+        :param verify: verify SSL certificates
+        :param json: request payload as JSON. This parameter has precedence over "data", that is,
+            if it's present then "data" is ignored.
+        :raises: ConnectionError
+        :return: Response object
+        """
+        if auth is None:
+            auth = self.auth
+        if cookies is None:
+            cookies=self.cookies
+        response = post(url, params=params, data=data, headers=headers, cookies=cookies, auth=auth,
+                        timeout=timeout, verify=self.verify, json=json)
+        self.cookies = response.cookies
+        return response
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
