@@ -198,7 +198,7 @@ class Response:
         self.content: bytes = b''
         self._text = None
         self._json = self.NULL
-        self.cookies: RequestsCookieJar = RequestsCookieJar()
+        self.cookies: CookieJar = RequestsCookieJar()
 
     def __str__(self) -> str:
         return f'<Response [{self.status_code}]>'
