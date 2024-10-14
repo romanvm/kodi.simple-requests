@@ -34,6 +34,8 @@ Supported:
 
 Not supported:
 * File upload.
+* Streaming requests and responses. simple-requests is not suitable for sending and receiving
+  large volumes of data.
 """
 import gzip
 import io
@@ -311,7 +313,8 @@ def post(url: str,
         For str, bytes or file object it's caller's responsibility to provide a proper
         'Content-Type' header.
     :param headers: additional headers
-    :param cookies: cookies as a dict or CookieJar object
+    :param cookies: cookies as a dict or a CookieJar object. If a CookieJar object is provided
+        the same object will be attached to a response object with the updated set of cookies.
     :param auth: a tuple of (login, password) for Basic authentication
     :param timeout: request timeout in seconds
     :param verify: verify SSL certificates
@@ -377,7 +380,8 @@ def get(url: str,
     :param url: URL
     :param params: URL query params
     :param headers: additional headers
-    :param cookies: cookies as a dict or CookieJar object
+    :param cookies: cookies as a dict or a CookieJar object. If a CookieJar object is provided
+        the same object will be attached to a response object with the updated set of cookies.
     :param auth: a tuple of (login, password) for Basic authentication
     :param timeout: request timeout in seconds
     :param verify: verify SSL certificates
