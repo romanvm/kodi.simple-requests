@@ -23,6 +23,7 @@ A simple library for making HTTP requests with API similar to the popular "reque
 It depends only on the Python standard library.
 
 Supported:
+
 * HTTP methods: GET, POST
 * HTTP and HTTPS.
 * Disabling SSL certificates validation.
@@ -33,9 +34,25 @@ Supported:
 * Gzipped response content.
 
 Not supported:
+
 * File upload.
 * Streaming requests and responses. simple-requests is not suitable for sending and receiving
   large volumes of data.
+
+Example::
+
+    import simple_requests as requests
+
+    response = requests.get('https://example.com')
+    if not response.ok:
+        response.raise_for_status()
+    print(response.text)
+
+    response = requests.post('https://example.com/login', data={'username': 'foo', 'password': 'bar'})
+    if not response.ok:
+        response.raise_for_status()
+    print(response.text)
+
 """
 import gzip
 import io
