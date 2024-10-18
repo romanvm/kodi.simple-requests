@@ -43,17 +43,20 @@ Not supported:
 
 Example::
 
+    from pprint import pprint
+
     import simple_requests as requests
 
-    response = requests.get('https://example.com')
+    response = requests.get('https://httpbin.org/html')
     if not response.ok:
         response.raise_for_status()
     print(response.text)
 
-    response = requests.post('https://example.com/login', data={'username': 'foo', 'password': 'bar'})
+    response = requests.post('https://httpbin.org/post',
+                             data={'username': 'foo', 'password': 'bar'})
     if not response.ok:
         response.raise_for_status()
-    print(response.text)
+    pprint(response.json())
 
 """
 import gzip
