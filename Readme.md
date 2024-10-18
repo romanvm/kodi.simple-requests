@@ -37,4 +37,4 @@ if not response.ok:
 print(response.text)
 ```
 
-This library is bundled as a library addon for [Kodi mediacenter](https://github.com/xbmc/xbmc).
+This library is packaged as a library addon for [Kodi mediacenter](https://github.com/xbmc/xbmc).
