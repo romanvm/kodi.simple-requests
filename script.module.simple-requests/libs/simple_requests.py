@@ -36,8 +36,6 @@ Supported:
 Not supported:
 
 * File upload.
-* Persistent Session objects. Since Python's built-in **urllib.request** does not support keep-alive
-  connections, persistent sessions do not make much sense in this case.
 * Streaming requests and responses. simple-requests is not suitable for sending and receiving
   large volumes of data.
 
@@ -409,3 +407,52 @@ def get(url: str,
     """
     return post(url=url, params=params, headers=headers, cookies=cookies,
                 auth=auth, timeout=timeout, verify=verify)
+
+
+class Session:
+    """
+    Compatibility class that mimics basic requests.Session functionality
+
+    This class does not support any connection persistence.
+    """
+
+    def __init__(self):
+        self.auth: Optional[Tuple[str, str]] = None
+        self.cookies: CookieJar = RequestsCookieJar()
+        self.headers: Union[HTTPMessage, Dict[str, str]] = HTTPMessage()
+        self.params: Optional[Dict[str, str]] = None
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def request(self, method, *args, **kwargs):
+        """Compatibility method that support only GET and POST requests"""
+        method =  method.lower()
+        try:
+            method_func = getattr(self, method)
+        except AttributeError as exc:
+            raise ValueError(f'Unsupported method: {method}') from exc
+        if 'auth' not in kwargs and self.auth is not None:
+            kwargs['auth'] = self.auth
+        if 'cookies' not in kwargs:
+            kwargs['cookies'] = self.cookies
+        headers_arg_position = 3 if method == 'get' else 4
+        if 'params' not in kwargs and len(args) < 2 and self.params is not None:
+            kwargs['params'] = self.params
+        if 'headers' not in kwargs and len(args) < headers_arg_position:
+            kwargs['headers'] = self.headers
+        return method_func(*args, **kwargs)
+
+    def get(self, *args, **kwargs):
+        """Call get() function"""
+        return get(*args, **kwargs)
+
+    def post(self, *args, **kwargs):
+        """Call post() function"""
+        return post(*args, **kwargs)

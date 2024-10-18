@@ -15,8 +15,6 @@ Supported:
 
 Not supported:
 * File upload.
-* Persistent Session objects. Since Python's built-in **urllib.request** does not support keep-alive
-  connections, persistent sessions do not make much sense in this case.
 * Streaming requests and responses. simple-requests is not suitable for sending and receiving
   large volumes of data.
 
