@@ -377,7 +377,6 @@ def post(url: str,
         content = gzip_file.read()
     response.content = content
     if isinstance(cookies, CookieJar):
-        cookies.clear()
         response.cookies = cookies
     response.cookies.extract_cookies(resp, request)
     return response
