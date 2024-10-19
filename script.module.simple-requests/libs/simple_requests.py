@@ -20,7 +20,7 @@
 """
 A simple library for making HTTP requests with API similar to the popular "requests" library
 
-It depends only on the Python standard library.
+It depends only on the Python standard library and uses **urllib.request** module internally.
 
 Supported:
 
