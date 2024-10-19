@@ -19,19 +19,19 @@ jobs:
         python-version: "3.12"
     - name: Install dependencies
       run: |
-        pip install -q Pylint Kodistubs typing-extensions
+        pip install -q Pylint
     - name: Check with Pylint
       run: |
         pylint --exit-zero script.module.simple-requests/libs/simple_requests.py
+    - name: Test
+      run: |
+        python3 tests/tests.py
     - name: Install addon checker
       run: |
         pip install -q kodi-addon-checker
     - name: Check with addon-checker
       run: |
         kodi-addon-checker --branch matrix
-    - name: Test
-      run: |
-        python3 tests/tests.py
     - name: Install addon submitter
       run: |
         pip install -q git+https://github.com/xbmc/kodi-addon-submitter.git
