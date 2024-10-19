@@ -32,3 +32,9 @@ jobs:
     - name: Test
       run: |
         python3 tests/tests.py
+    - name: Install addon checker
+      run: |
+        pip install -q kodi-addon-checker
+    - name: Check with addon-checker
+      run: |
+        kodi-addon-checker --branch matrix script.module.simple-requests
