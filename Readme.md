@@ -40,3 +40,5 @@ pprint(response.json())
 ```
 
 This library is packaged as a library addon for [Kodi mediacenter](https://github.com/xbmc/xbmc).
+
+License: [MIT](https://opensource.org/license/mit)
