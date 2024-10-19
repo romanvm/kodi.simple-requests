@@ -2,16 +2,16 @@
 # (c) 2020, Roman Miroshnychenko
 # License: MIT
 
-import os
+from pathlib import Path
 from xml.dom.minidom import parse
 
 from setuptools import setup
 
-this_dir = os.path.dirname(os.path.abspath(__file__))
+THIS_DIR = Path(__file__).resolve().parent
 
 
 def get_version():
-    doc = parse(os.path.join(this_dir, 'script.module.simple-requests', 'addon.xml'))
+    doc = parse(str(THIS_DIR / 'script.module.simple-requests' / 'addon.xml'))
     return doc.firstChild.getAttribute('version')
 
 
