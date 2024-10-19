@@ -1,4 +1,3 @@
-# coding: utf-8
 # (c) 2020, Roman Miroshnychenko
 # License: MIT
 
